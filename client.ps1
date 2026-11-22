@@ -5,7 +5,7 @@ while (-not [int]::TryParse((Read-Host "Port"), [ref]$port)) {
 
 $client = [System.Net.Sockets.TcpClient]::new()
 
-$client.Connect("127.0.0.1", $port)
+$client.Connect("192.168.10.162", $port)
 
 $stream = $client.GetStream()
 
