@@ -1,6 +1,7 @@
-param(
-    [int]$port
-)
+$port = 0
+while (-not [int]::TryParse((Read-Host "Port"), [ref]$port)) {
+    Write-Host "Invalid input. Please enter a whole number"
+}
 
 $client = [System.Net.Sockets.TcpClient]::new()
 
