@@ -22,10 +22,6 @@ try {
         }
 
         $writer.WriteLine($message)
-
-        $response = $reader.ReadLine()
-
-        Write-Host "Server: $response"
     }
 }
 finally {

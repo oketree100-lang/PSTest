@@ -12,32 +12,36 @@ $listener.Start()
 
 Write-Host "Server listening on port $($Port)..."
 
+$clients = [System.Collections.Generic.List[object]]::new()
+
 try {
-    while ($true) {
-        $client = $listener.AcceptTcpClient()
+    while ($listener.Server.IsBound) {
+        if ($listener.Pending()) {
+            $clients.Add($listener.AcceptTcpClient())
+        }
 
-        Write-Host "Client Connected!"
+        for ($i = $clients.Count - 1; $i -ge 0; $i--) {
+            $client = $clients[$i]
+            $stream = $client.GetStream()
+            $reader = [System.IO.StreamReader]::new($stream)
 
-        $stream = $client.GetStream()
-        $reader = [System.IO.StreamReader]::new($stream)
-        $writer = [System.IO.StreamWriter]::new($stream)
-        $writer.AutoFlush = $true
+            if ($reader.BaseStream.DataAvailable) {
+                $content = $reader.ReadLine()
+                Write-Host "Received: $content"
+            }
 
-        try {
-            while ($null -ne ($message = $reader.ReadLine())) {
-                Write-Host "Received: $message"
-
-                $writer.WriteLine("Server received: $message")
+            if ($client.Client.Poll(0, [System.Net.Sockets.SelectMode]::SelectRead) -and $client.Available -eq 0) {
+                $stream.Dispose()
+                $reader.Dispose()
+                $client.Dispose()
+                $clients.RemoveAt($i)
             }
         }
-        finally {
-            $reader.Dispose()
-            $writer.Dispose()
-            $client.Dispose()
-            Write-Host "Client disconnected."
-        }
+
+        Start-Sleep -Milliseconds 1000
     }
 }
 finally {
     $listener.Stop()
+    Write-Host "Server closed"
 }
