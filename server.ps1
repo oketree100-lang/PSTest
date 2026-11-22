@@ -1,15 +1,15 @@
 param(
-    [int]$port
+    [int]$Port
 )
 
 $listener = [System.Net.Sockets.TcpListener]::new(
     [System.Net.IPAddress]::Any,
-    $port
+    $Port
 )
 
 $listener.Start()
 
-Write-Host "Server listening on port $($port)..."
+Write-Host "Server listening on port $($Port)..."
 
 try {
     while ($true) {
