@@ -79,9 +79,6 @@ if ($Command -eq "setport") {
                 if ($content -eq "Selected") {
                     $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 
-                    Write-Host "dim $($bounds.Width)x$($bounds.Height)"
-                    Write-Host "loc $($bounds.X), $($bounds.Y)"
-                    
                     $bitmap = [System.Drawing.Bitmap]::new(
                         $bounds.Width,
                         $bounds.Height
