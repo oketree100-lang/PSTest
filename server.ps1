@@ -5,6 +5,9 @@ param(
     [string]$Port
 )
 
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
 $rootPath = Join-Path $env:LOCALAPPDATA "PSTest"
 $configPath = Join-Path $rootPath "host_config.txt"
 
@@ -57,6 +60,75 @@ if ($Command -eq "setport") {
                     $selected--
                 } elseif ($key.Key -eq "DownArrow" -and $selected -lt $clients.Count - 1) {
                     $selected++
+                } elseif ($key.Key -eq "Enter") {
+                    $client = $clients[$selected]
+
+                    $stream = $client.GetStream()
+                    $reader = [System.IO.StreamReader]::new($stream)
+                    $writer = [System.IO.StreamWriter]::new($stream)
+                    $writer.AutoFlush = $true
+
+                    $writer.WriteLine("Selected")
+
+                    $form = [System.Windows.Forms.Form]::new()
+                    $form.Text = "Remote Client"
+                    $form.Width = 1000
+                    $form.height = 700
+                    $form.StartPosition = "CenterScreen"
+
+                    $pictureBox = [System.Windows.Forms.PictureBox]::new()
+                    $pictureBox.Dock = "Fill"
+                    $pictureBox.Image = $null
+                    $pictureBox.SizeMode = "Zoom"
+
+                    $form.Controls.Add($pictureBox)
+
+                    [void]$form.Show()
+
+                    while ($form.Visible) {
+                        $stream.WriteByte(0)
+
+                        [System.Windows.Forms.Application]::DoEvents()
+
+                        $lengthBytes = [byte[]]::new(4)
+                        $offset = 0
+
+                        while ($offset -lt 4) {
+                            $read = $stream.Read($lengthBytes, $offset, 4 - $offset)
+                            if ($read -eq 0) { throw "Client disconnected."}
+                            $offset += $read
+                        }
+
+                        $imageLength = [System.BitConverter]::ToInt32($lengthBytes, 0)
+
+                        if ($imageLength -le 0 -or $imageLength -gt 20MB) {
+                            throw "Invalid image size."
+                        }
+
+                        $pngBytes = [byte[]]::new($imageLength)
+                        $offset = 0
+
+                        while ($offset -lt $imageLength) {
+                            $read = $stream.Read($pngBytes, $offset, $imageLength - $offset)
+                            if ($read -eq 0) { throw "Client disconnected."}
+                            $offset += $read
+                        }
+
+                        if ($null -ne $image) {
+                            $image.Dispose()
+                        }
+
+                        $ms = [System.IO.MemoryStream]::new($pngBytes)
+                        $image = [System.Drawing.Image]::FromStream($ms)
+
+                        $pictureBox.Image = $image
+                        
+                        Start-Sleep -Milliseconds 17
+                    }
+
+                    $form.Dispose()
+
+                    $stream.WriteByte(1)
                 }
 
                 if ($selected -lt $clients.Count) {
@@ -127,4 +199,6 @@ if ($Command -eq "setport") {
             $client.Dispose()
         }
     }
+} else {
+    Write-Host "Unknown command"
 }

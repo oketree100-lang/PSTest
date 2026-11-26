@@ -7,6 +7,8 @@ param(
     [string]$Name
 )
 
+Add-Type -AssemblyName System.Windows.Forms
+
 $rootPath = Join-Path $env:LOCALAPPDATA "PSTest"
 $configPath = Join-Path $rootPath "client_config.txt"
 
@@ -62,6 +64,46 @@ if ($Command -eq "setport") {
                     $writer.WriteLine("Connection-Test")
                 }
                 
+                if ($content -eq "Selected") {
+                    $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+                    
+                    $bitmap = [System.Drawing.Bitmap]::new(
+                        $bounds.Width,
+                        $bounds.Height
+                    )
+
+                    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+
+                    while ($true) {
+                        $byte = $stream.ReadByte()
+                        
+                        if ($byte -eq 1) {
+                            break
+                        }
+
+                        $graphics.CopyFromScreen(
+                            $bounds.Location,
+                            [System.Drawing.Point]::Empty,
+                            $bounds.Size
+                        )
+
+                        $memoryStream = [System.IO.MemoryStream]::new()
+
+                        $bitmap.Save(
+                            $memoryStream,
+                            [System.Drawing.Imaging.ImageFormat]::Png
+                        )
+
+                        $pngBytes = $memoryStream.ToArray()
+                        $memoryStream.Dispose()
+
+                        $lengthBytes = [System.BitConverter]::GetBytes([int]$pngBytes.Length)
+
+                        $stream.Write($lengthBytes, 0, 4)
+                        $stream.Write($pngBytes, 0, $pngBytes.Length)
+                    }
+                }
+
                 Start-Sleep -Milliseconds 300
             }
         } else {
@@ -70,5 +112,11 @@ if ($Command -eq "setport") {
     }
     finally {
         $client.Dispose()
+
+        if ($null -ne $form) {
+            $form.Dispose()
+        }
     }
+} else {
+    Write-Host "Unknown command"
 }
