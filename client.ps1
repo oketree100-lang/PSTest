@@ -7,6 +7,18 @@ param(
     [string]$Name
 )
 
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public class DPI {
+    [DllImport("user32.dll")]
+    public static extern bool SetProcessDPIAware();
+}
+"@
+
+[void][DPI]::SetProcessDPIAware()
+
 Add-Type -AssemblyName System.Windows.Forms
 
 $rootPath = Join-Path $env:LOCALAPPDATA "PSTest"
