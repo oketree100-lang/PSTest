@@ -77,9 +77,9 @@ if ($Command -eq "setport") {
                     $form.StartPosition = "CenterScreen"
 
                     $pictureBox = [System.Windows.Forms.PictureBox]::new()
-                    $pictureBox.Dock = "Fill"
+                    $pictureBox.Dock = [System.Windows.Forms.DockStyle]::Fill
                     $pictureBox.Image = $null
-                    $pictureBox.SizeMode = "Zoom"
+                    $pictureBox.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
 
                     $form.Controls.Add($pictureBox)
 
