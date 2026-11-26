@@ -5,6 +5,30 @@ param(
     [string]$Port
 )
 
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class DpiNative {
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetProcessDPIAware();
+}
+"@
+
+try {
+    $result = [DpiNative]::SetProcessDpiAwarenessContext([IntPtr](-4))
+
+    if (-not $result) {
+        [DpiNative]::SetProcessDPIAware()
+    }
+}
+catch {
+    [DpiNative]::SetProcessDPIAware()
+}
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
@@ -71,7 +95,7 @@ if ($Command -eq "setport") {
                     $writer.WriteLine("Selected")
 
                     $form = [System.Windows.Forms.Form]::new()
-                    $form.Text = "Remote Client"
+                    $form.Text = "Remote Client - $($usernames[$selected])"
                     $form.Width = 1000
                     $form.height = 700
                     $form.StartPosition = "CenterScreen"
