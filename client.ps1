@@ -99,12 +99,18 @@ if ($Command -eq "setport") {
                             $bounds.Size
                         )
 
+                        $encoder = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
+                            Where-Object { $_.MimeType -eq "image/jpeg" }
+
+                        $quality = [System.Drawing.Imaging.Encoder]::Quality
+                        $parameters = [System.Drawing.Imaging.EncoderParameters]::new(1)
+                        $parameters.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new(
+                            $quality, [long]75
+                        )
+
                         $memoryStream = [System.IO.MemoryStream]::new()
 
-                        $bitmap.Save(
-                            $memoryStream,
-                            [System.Drawing.Imaging.ImageFormat]::Png
-                        )
+                        $bitmap.Save($memoryStream, $encoder, $parameters)
 
                         $pngBytes = $memoryStream.ToArray()
                         $memoryStream.Dispose()

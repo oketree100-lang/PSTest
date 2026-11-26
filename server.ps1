@@ -129,11 +129,11 @@ if ($Command -eq "setport") {
                             throw "Invalid image size."
                         }
 
-                        $pngBytes = [byte[]]::new($imageLength)
+                        $jpgBytes = [byte[]]::new($imageLength)
                         $offset = 0
 
                         while ($offset -lt $imageLength) {
-                            $read = $stream.Read($pngBytes, $offset, $imageLength - $offset)
+                            $read = $stream.Read($jpgBytes, $offset, $imageLength - $offset)
                             if ($read -eq 0) { throw "Client disconnected."}
                             $offset += $read
                         }
@@ -142,12 +142,12 @@ if ($Command -eq "setport") {
                             $image.Dispose()
                         }
 
-                        $ms = [System.IO.MemoryStream]::new($pngBytes)
+                        $ms = [System.IO.MemoryStream]::new($jpgBytes)
                         $image = [System.Drawing.Image]::FromStream($ms)
 
                         $pictureBox.Image = $image
                         
-                        Start-Sleep -Milliseconds 17
+                        Start-Sleep -Milliseconds 15
                     }
 
                     $form.Dispose()
