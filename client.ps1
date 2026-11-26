@@ -105,7 +105,7 @@ if ($Command -eq "setport") {
                         $quality = [System.Drawing.Imaging.Encoder]::Quality
                         $parameters = [System.Drawing.Imaging.EncoderParameters]::new(1)
                         $parameters.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new(
-                            $quality, [long]75
+                            $quality, [long]40
                         )
 
                         $memoryStream = [System.IO.MemoryStream]::new()

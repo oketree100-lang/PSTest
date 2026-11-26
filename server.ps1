@@ -147,7 +147,7 @@ if ($Command -eq "setport") {
 
                         $pictureBox.Image = $image
                         
-                        Start-Sleep -Milliseconds 15
+                        Start-Sleep -Milliseconds 5
                     }
 
                     $form.Dispose()
