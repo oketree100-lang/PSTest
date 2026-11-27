@@ -49,6 +49,12 @@ function Set-Port {
     $configContent | Set-Content $configPath
 }
 
+function Set-Host {
+    $configContent[1] = $IP
+
+    $configContent | Set-Content $configPath
+}
+
 function Start-RemoteSession {
     $stream = $client.GetStream()
 
@@ -153,11 +159,12 @@ function Start-HostSession {
 
 function Find-Host {
     Write-Host 'Searching for host...'
-    
+
     while ($true) {
         $client = [System.Net.Sockets.TcpClient]::new()
 
         try {
+            Write-Host "Trying to connect to $($configContent[1]):$($configContent[0])"
             $task = $client.ConnectAsync($configContent[1], $configContent[0])
 
             while ($true) {
@@ -165,7 +172,7 @@ function Find-Host {
                     Write-Host 'Found host'
                     Start-HostSession $client
                     break
-                } elseif ($task.Status -eq "Faulted") {
+                } elseif ($task.Status -eq 'Faulted') {
                     break
                 } else {
                     Start-Sleep -Milliseconds 300
@@ -186,6 +193,7 @@ Initialize-CliEnvironment
 switch ($Command) {
     'set-name' { Set-Name }
     'set-port' { Set-Port }
+    'set-host' { Set-Host }
     'connect' { Find-Host }
     default { Write-Host "Unknown command" }
 }
