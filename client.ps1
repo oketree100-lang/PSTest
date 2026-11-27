@@ -106,8 +106,8 @@ function Start-RemoteSession {
 
         $lengthBytes = [System.BitConverter]::GetBytes([int]$imageBytes.Length)
 
-        [void]$stream.WriteAsync($lengthBytes, 0, 4)
-        [void]$stream.WriteAsync($imageBytes, 0, $imageBytes.Length)
+        $stream.Write($lengthBytes, 0, 4)
+        $stream.Write($imageBytes, 0, $imageBytes.Length)
     }
 
     $memoryStream.Dispose()
