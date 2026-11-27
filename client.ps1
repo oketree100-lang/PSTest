@@ -151,12 +151,12 @@ function Start-HostSession {
 }
 
 function Find-Host {
+    Write-Host 'Searching for host...'
+    
     while ($true) {
         $client = [System.Net.Sockets.TcpClient]::new()
 
         try {
-            Write-Host 'Searching for host...'
-
             $task = $client.ConnectAsync($configContent[1], $configContent[0])
 
             while ($true) {

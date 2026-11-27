@@ -11,29 +11,47 @@ using System.Runtime.InteropServices;
 
 public static class DpiNative {
     [DllImport("user32.dll", SetLastError = true)]
-    public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
-
-    [DllImport("user32.dll")]
-    public static extern bool SetProcessDPIAware();
+    public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
 }
 "@
 
-try {
-    $result = [DpiNative]::SetProcessDpiAwarenessContext([IntPtr](-4))
-
-    if (-not $result) {
-        [DpiNative]::SetProcessDPIAware()
-    }
-}
-catch {
-    [DpiNative]::SetProcessDPIAware()
-}
+[void][DpiNative]::SetThreadDpiAwarenessContext([IntPtr](-4))
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 $rootPath = Join-Path $env:LOCALAPPDATA "PSTest"
 $configPath = Join-Path $rootPath "host_config.txt"
+
+function Get-PictureBoxInfo {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Forms.PictureBox]$PictureBox
+    )
+
+    if (-not $PictureBox.Image) { return $null }
+
+    $pbWidth = $PictureBox.ClientSize.Width
+    $pbHeight = $PictureBox.ClientSize.Height
+    $imgWidth = $PictureBox.Image.Width
+    $imgHeight = $PictureBox.Image.Height
+
+    $ratioX = $pbWidth / $imgWidth
+    $ratioY = $pbHeight / $imgHeight
+    $ratio = [Math]::Min($ratioX, $ratioY)
+
+    $renderedWidth = $imgWidth * $ratio
+    $renderedHeight = $imgHeight * $ratio
+
+    $offsetX = [int](($pbWidth - $renderedWidth) / 2)
+    $offsetY = [int](($pbHeight - $renderedHeight) / 2)
+
+    return [PSCustomObject]@{
+        offsetX = $offsetX
+        offsetY = $offsetY
+        ratio = $ratio
+    }
+}
 
 function Initialize-CliEnvironment {
     if (-not (Test-Path -Path $rootPath -PathType Container)) {
@@ -125,16 +143,24 @@ function Start-RemoteSession {
         $memoryStream = $null
 
         while ($form.Visible) {
-            [System.Windows.Forms.Application]::DoEvents()
-
             $isFormSelected = [System.Windows.Forms.Form]::ActiveForm -eq $form
             $screenPos = [System.Windows.Forms.Cursor]::Position
             $clientPos = $pictureBox.PointToClient($screenPos)
 
             if ($isFormSelected -and $form.ClientRectangle.Contains($clientPos)) {
-                $stream.WriteByte(2)
-                [byte[]]$mouseBytes = [System.BitConverter]::GetBytes($clientPos.X - $pictureBox.Location.X) + [System.BitConverter]::GetBytes($clientPos.Y - $pictureBox.Location.Y)
-                $stream.Write($mouseBytes, 0, 8)
+                $pbInfo = Get-PictureBoxInfo $pictureBox
+                
+                if ($null -ne $pbInfo -and $pbInfo.ratio -gt 0) {
+                    [int32]$remoteX = ($clientPos.X - $pbInfo.offsetX) / $pbInfo.ratio
+                    [int32]$remoteY = ($clientPos.Y - $pbInfo.offsetY) / $pbInfo.ratio
+
+                    $stream.WriteByte(2)
+                    Write-Host $pbInfo
+                    [byte[]]$mouseBytes = [System.BitConverter]::GetBytes($remoteX) + [System.BitConverter]::GetBytes($remoteY)
+                    $stream.Write($mouseBytes, 0, 8)
+                } else {
+                    $stream.WriteByte(0)
+                }
             } else {
                 $stream.WriteByte(0)
             }
@@ -179,6 +205,8 @@ function Start-RemoteSession {
             $image = [System.Drawing.Image]::FromStream($memoryStream)
 
             $pictureBox.Image = $image
+
+            [System.Windows.Forms.Application]::DoEvents()
         }
     }
     finally {
