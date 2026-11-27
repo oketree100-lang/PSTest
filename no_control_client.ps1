@@ -37,6 +37,12 @@ function Initialize-CliEnvironment {
     }
 }
 
+function Set-Name {
+    $configContent[2] = $Name
+
+    $configContent | Set-Content $configPath
+}
+
 function Set-Port {
     $configContent[0] = $Port
 
@@ -178,6 +184,7 @@ $configContent = Get-Content -Path $configPath
 Initialize-CliEnvironment
 
 switch ($Command) {
+    'set-name' { Set-Name }
     'set-port' { Set-Port }
     'connect' { Find-Host }
     default { Write-Host "Unknown command" }
