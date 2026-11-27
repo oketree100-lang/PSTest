@@ -77,7 +77,7 @@ function Start-RemoteSession {
                 $offset = 0
 
                 while ($offset -lt 8) {
-                    $read += $stream.Read($mouseBytes, $offset, 8 - $offset)
+                    $read = $stream.Read($mouseBytes, $offset, 8 - $offset)
                     $offset += $read
                     Write-Host $read
                 }
