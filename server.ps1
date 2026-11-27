@@ -35,185 +35,227 @@ Add-Type -AssemblyName System.Drawing
 $rootPath = Join-Path $env:LOCALAPPDATA "PSTest"
 $configPath = Join-Path $rootPath "host_config.txt"
 
-if (-not (Test-Path -Path $rootPath -PathType Container)) {
-    [void](New-Item -Path $rootPath -Type Container)
+function Initialize-CliEnvironment {
+    if (-not (Test-Path -Path $rootPath -PathType Container)) {
+        [void](New-Item -Path $rootPath -Type Container)
+    }
+    
+    if (-not (Test-Path -Path $configPath -PathType Leaf)) {
+        [void](New-Item -Path $configPath -Type File)
+
+        Add-Content -Path $configPath -Value "`n"
+    }
 }
 
-if (-not (Test-Path -Path $configPath -PathType Leaf)) {
-    [void](New-Item -Path $configPath -Type File)
-
-    Add-Content -Path $configPath -Value "`n"
-}
-
-$configContent = Get-Content $configPath
-
-if ($Command -eq "setport") {
+function Set-Port {
     $configContent[0] = $Port
 
     $configContent | Set-Content $configPath
-} elseif ($Command -eq "listen") {
+}
+
+function Update-Client {
+    [Parameter(Mandatory)]
+    param(
+        [System.Net.Sockets.TcpClient]$Client
+    )
+
+    $stream = $Client.GetStream()
+    
+    $disconnected = $false
+
     try {
-        [System.Console]::CursorVisible = $false
+        $stream.WriteByte(0)
+        $disconnected = ($stream.ReadByte() -eq -1)
+    }
+    catch [System.IO.IOException] {
+        $disconnected = $true
+    }
 
-        $listener = [System.Net.Sockets.TcpListener]::new(
-            [System.Net.IPAddress]::Any,
-            $configContent[0]
-        )
 
-        $clients = [System.Collections.Generic.List[System.Net.Sockets.TcpClient]]::new()
-        $usernames = [System.Collections.Generic.List[string]]::new()
-
-        $listener.Start()
-
-        $selected = 0
+    if ($disconnected) {
+        $idx = $clients.IndexOf($Client)
+        $clients.RemoveAt($idx)
+        $usernames.RemoveAt($idx)
+        
+        $Client.Dispose()
 
         Clear-Host
-        Write-Host "Listening for clients" -NoNewline
-        [System.Console]::SetCursorPosition(0, 0)
 
-        while ($true) {
-            while ([System.Console]::KeyAvailable) {
-                $key = [System.Console]::ReadKey($true)
+        foreach ($username in $usernames) {
+            Write-Host "Username: $username"
+        }
 
-                if ($selected -lt $clients.Count) {
-                    [System.Console]::SetCursorPosition(0, $selected)
-                    Write-Host "Username: $($usernames[$selected])       "
-                }
+        continue
+    }
 
-                if ($key.Key -eq "UpArrow" -and $selected -gt 0) {
-                    $selected--
-                } elseif ($key.Key -eq "DownArrow" -and $selected -lt $clients.Count - 1) {
-                    $selected++
-                } elseif ($key.Key -eq "Enter") {
-                    $client = $clients[$selected]
+    $stream.WriteByte(0)
+}
 
-                    $stream = $client.GetStream()
-                    $reader = [System.IO.StreamReader]::new($stream)
-                    $writer = [System.IO.StreamWriter]::new($stream)
-                    $writer.AutoFlush = $true
+function Start-RemoteSession {
+    [Parameter(Mandatory)]
+    param(
+        [System.Net.Sockets.TcpClient]$Client
+    )
 
-                    $writer.WriteLine("Selected")
+    $stream = $Client.GetStream()
 
-                    $form = [System.Windows.Forms.Form]::new()
-                    $form.Text = "Remote Client - $($usernames[$selected])"
-                    $form.Width = 1000
-                    $form.height = 700
-                    $form.StartPosition = "CenterScreen"
+    $stream.WriteByte(1)
 
-                    $pictureBox = [System.Windows.Forms.PictureBox]::new()
-                    $pictureBox.Dock = [System.Windows.Forms.DockStyle]::Fill
-                    $pictureBox.Image = $null
-                    $pictureBox.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
+    try {
+        while ($stream.ReadByte() -ne 1) {}
 
-                    $form.Controls.Add($pictureBox)
+        $form = [System.Windows.Forms.Form]::new()
+        $form.Text = "Remote Client - $($usernames[$selected])"
+        $form.Width = 1000
+        $form.Height = 700
+        $form.StartPosition = 'CenterScreen'
+        
+        $pictureBox = [System.Windows.Forms.PictureBox]::new()
+        $pictureBox.Dock = [System.Windows.Forms.DockStyle]::Fill
+        $pictureBox.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::zoom
+        $pictureBox.Image = $null
 
-                    [void]$form.Show()
+        $form.Controls.Add($pictureBox)
 
-                    while ($form.Visible) {
-                        $stream.WriteByte(0)
+        [void]$form.Show()
 
-                        [System.Windows.Forms.Application]::DoEvents()
+        $image = $null
+        $memoryStream = $null
 
-                        $lengthBytes = [byte[]]::new(4)
-                        $offset = 0
+        while ($form.Visible) {
+            [System.Windows.Forms.Application]::DoEvents()
 
-                        while ($offset -lt 4) {
-                            $read = $stream.Read($lengthBytes, $offset, 4 - $offset)
-                            if ($read -eq 0) { throw "Client disconnected."}
-                            $offset += $read
-                        }
+            $stream.WriteByte(0)
 
-                        $imageLength = [System.BitConverter]::ToInt32($lengthBytes, 0)
+            $lengthBytes = [byte[]]::new(4)
+            $offset = 0
 
-                        if ($imageLength -le 0 -or $imageLength -gt 20MB) {
-                            throw "Invalid image size."
-                        }
-
-                        $jpgBytes = [byte[]]::new($imageLength)
-                        $offset = 0
-
-                        while ($offset -lt $imageLength) {
-                            $read = $stream.Read($jpgBytes, $offset, $imageLength - $offset)
-                            if ($read -eq 0) { throw "Client disconnected."}
-                            $offset += $read
-                        }
-
-                        if ($null -ne $image) {
-                            $image.Dispose()
-                        }
-
-                        $ms = [System.IO.MemoryStream]::new($jpgBytes)
-                        $image = [System.Drawing.Image]::FromStream($ms)
-
-                        $pictureBox.Image = $image
-                        
-                        Start-Sleep -Milliseconds 5
-                    }
-
-                    $form.Dispose()
-
-                    $stream.WriteByte(1)
-                }
-
-                if ($selected -lt $clients.Count) {
-                    [System.Console]::SetCursorPosition(0, $selected)
-                    Write-Host "> Username: $($usernames[$selected])       "
-                }
+            while ($offset -lt 4) {
+                $read = $stream.Read($lengthBytes, $offset, 4 - $offset)
+                if ($read -eq 0) { throw 'Client disconnected' }
+                $offset += $read
             }
 
+            $imageLength = [System.BitConverter]::ToInt32($lengthBytes, 0)
+
+            if ($imageLength -le 0 -or $imageLength -gt 20MB) {
+                throw 'Invalid image size'
+            }
+
+            $imageBytes = [byte[]]::new($imageLength)
+            $offset = 0
+
+            while ($offset -lt $imageLength) {
+                $read = $stream.Read($imageBytes, $offset, $imageLength - $offset)
+                if ($read -eq 0) { throw 'Client disconnected' }
+                $offset += $read
+            }
+
+            if ($null -ne $image) {
+                $image.Dispose()
+                $image = $null
+            }
+            if ($null -ne $memoryStream) {
+                $memoryStream.Dispose()
+                $memoryStream = $null
+            }
+
+            $memoryStream = [System.IO.MemoryStream]::new($imageBytes)
+
+            $image = [System.Drawing.Image]::FromStream($memoryStream)
+
+            $pictureBox.Image = $image
+        }
+    }
+    finally {
+        $form.Dispose()
+        $pictureBox.Dispose()
+
+        $stream.WriteByte(1)
+    }
+}
+
+function Start-ClientListener {
+    [System.Console]::CursorVisible = $false
+    Clear-Host
+    Write-Host 'Listening for clients...'
+
+    $clients = [System.Collections.Generic.List[System.Net.Sockets.TcpClient]]::new()
+    $usernames = [System.Collections.Generic.List[string]]::new()
+
+    $listener = [System.Net.Sockets.TcpListener]::new(
+        [System.Net.IPAddress]::Any,
+        $configContent[0]
+    )
+
+    $listener.Start()
+
+    try {
+        $selected = 0
+
+        while ($true) {
             if ($listener.Pending()) {
                 $client = $listener.AcceptTcpClient()
                 $clients.Add($client)
 
                 $stream = $client.GetStream()
-                $reader = [System.IO.StreamReader]::new($stream)
+                $stream.ReadTimeout = 3000
 
-                [string]$username = $reader.ReadLine()
+                $bytesLength = $stream.ReadByte()
+
+                $bytes = [byte[]]::new($bytesLength)
+
+                [void]$stream.Read($bytes, 0, $bytesLength)
+
+                $username = [System.Text.Encoding]::UTF8.GetString($bytes)
 
                 $usernames.Add($username)
 
-                Write-Host "Username: $username       "
+                if ($clients.Count -eq 1) {
+                    Clear-Host
+                }
+
+                Write-Host "Username: $username"
             }
 
             for ($i = $clients.Count - 1; $i -ge 0; $i--) {
-                $client = $clients[$i];
+                Update-Client $clients[$i]
+            }
 
-                $stream = $client.GetStream()
-                $reader = [System.IO.StreamReader]::new($stream)
-                $writer = [System.IO.StreamWriter]::new($stream)
-                $writer.AutoFlush = $true
-                
-                $writer.WriteLine("Connection-Test")
-                
-                $reachable = $true
+            $e = [char]27
+            $buffer = [System.Text.StringBuilder]::new()
 
-                try {
-                    $content = $reader.ReadLine()
-                }
-                catch {
-                    $reachable = $false
-                }
+            [void]$buffer.Append("$e[?2026h")
 
-                if (-not $reachable -or $null -eq $content) {
-                    $client.Dispose()
-                    $idx = $clients.IndexOf($client)
-                    [void]$clients.RemoveAt($idx)
-                    [void]$usernames.RemoveAt($idx)
+            while ([System.Console]::KeyAvailable) {
+                $key = [System.Console]::ReadKey($true)
 
-                    Clear-Host
-                    
-                    if ($clients.Count -eq 0) {
-                        Write-Host "Listening for clients" -NoNewline
-                        [System.Console]::SetCursorPosition(0, 0)
-                    } else {
-                        foreach ($username in $usernames) {
-                            Write-Host "Username: $username       "
+                $row = $selected + 1
+                [void]$buffer.Append("$e[${row};1H$e[2KUsername: $($usernames[$selected])")
+
+                switch ($key.Key) {
+                    'UpArrow' {
+                        if ($selected -gt 0) { $selected-- }
+                    }
+                    'DownArrow' {
+                        if ($selected -lt $clients.Count - 1) { $selected++ }
+                    }
+                    'Enter' {
+                        if ($clients.Count -ne 0) {
+                            Start-RemoteSession $clients[$selected]
                         }
                     }
                 }
+
+                $row = $selected + 1
+                [void]$buffer.Append("$e[${row};1H$e[2K> Username: $($usernames[$selected])")
             }
 
-            Start-Sleep -Milliseconds 500
+            [void]$buffer.Append("$e[?2026l")
+
+            [System.Console]::Write($buffer.ToString())
+
+            Start-Sleep -Milliseconds 300
         }
     }
     finally {
@@ -222,7 +264,18 @@ if ($Command -eq "setport") {
         foreach ($client in $clients) {
             $client.Dispose()
         }
+
+        [System.Console]::CursorVisible = $true
     }
-} else {
-    Write-Host "Unknown command"
+}
+
+
+$configContent = Get-Content -Path $configPath
+
+Initialize-CliEnvironment
+
+switch ($Command) {
+    'setport' { Set-Port }
+    'listen' { Start-ClientListener }
+    default { Write-Host 'Unknown command' }
 }
