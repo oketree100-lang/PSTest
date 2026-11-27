@@ -77,7 +77,9 @@ function Start-RemoteSession {
                 $offset = 0
 
                 while ($offset -lt 8) {
-                    $offset += $stream.Read($mouseBytes, $offset, 8 - $offset)
+                    $read += $stream.Read($mouseBytes, $offset, 8 - $offset)
+                    $offset += $read
+                    Write-Host $read
                 }
                 
                 $x = [System.BitConverter]::ToInt32($mouseBytes, 0)
