@@ -63,13 +63,31 @@ function Start-RemoteSession {
     $quality = [System.Drawing.Imaging.Encoder]::Quality
     $parameters = [System.Drawing.Imaging.EncoderParameters]::new(1)
     $parameters.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new(
-        $quality, [long]40
+        $quality, [long]50
     )
 
     $memoryStream = [System.IO.MemoryStream]::new()
 
     while ($true) {
-        if ($stream.ReadByte() -eq 1) { break }
+        switch ($stream.ReadByte()) {
+            -1 { break }
+            2 {
+                $mouseBytes = [byte[]]::new(8)
+                
+                $offset = 0
+
+                while ($offset -lt 8) {
+                    $offset += $stream.Read($mouseBytes, $offset, 8 - $offset)
+                }
+                
+                $x = [System.BitConverter]::ToInt32($mouseBytes, 0)
+                $y = [System.BitConverter]::ToInt32($mouseBytes, 4)
+
+                Write-Host "x:$x y:$y"
+
+                [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new($x, $y)
+            }
+        }
 
         $memoryStream.SetLength(0)
         $memoryStream.Position = 0
@@ -83,13 +101,11 @@ function Start-RemoteSession {
         $bitmap.Save($memoryStream, $encoder, $parameters)
 
         $imageBytes = $memoryStream.ToArray()
-        
-        
 
         $lengthBytes = [System.BitConverter]::GetBytes([int]$imageBytes.Length)
 
-        $stream.Write($lengthBytes, 0, 4)
-        $stream.Write($imageBytes, 0, $imageBytes.Length)
+        [void]$stream.WriteAsync($lengthBytes, 0, 4)
+        [void]$stream.WriteAsync($imageBytes, 0, $imageBytes.Length)
     }
 
     $memoryStream.Dispose()

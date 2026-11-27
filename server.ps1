@@ -119,13 +119,25 @@ function Start-RemoteSession {
 
         [void]$form.Show()
 
+        $imageBytes = [byte[]]::new(0)
+
         $image = $null
         $memoryStream = $null
 
         while ($form.Visible) {
             [System.Windows.Forms.Application]::DoEvents()
 
-            $stream.WriteByte(0)
+            $isFormSelected = [System.Windows.Forms.Form]::ActiveForm -eq $form
+            $screenPos = [System.Windows.Forms.Cursor]::Position
+            $clientPos = $form.PointToClient($screenPos)
+
+            if ($isFormSelected -and $form.ClientRectangle.Contains($clientPos)) {
+                $stream.WriteByte(2)
+                [byte[]]$mouseBytes = [System.BitConverter]::GetBytes($clientPos.X) + [System.BitConverter]::GetBytes($clientPos.Y)
+                $stream.Write($mouseBytes, 0, 8)
+            } else {
+                $stream.WriteByte(0)
+            }
 
             $lengthBytes = [byte[]]::new(4)
             $offset = 0
@@ -142,7 +154,9 @@ function Start-RemoteSession {
                 throw 'Invalid image size'
             }
 
-            $imageBytes = [byte[]]::new($imageLength)
+            if ($imageBytes.Count -lt $imageLength) {
+                $imageBytes = [byte[]]::new($imageLength)
+            }
             $offset = 0
 
             while ($offset -lt $imageLength) {
