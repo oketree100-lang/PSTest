@@ -129,11 +129,11 @@ function Start-RemoteSession {
 
             $isFormSelected = [System.Windows.Forms.Form]::ActiveForm -eq $form
             $screenPos = [System.Windows.Forms.Cursor]::Position
-            $clientPos = $form.PointToClient($screenPos)
+            $clientPos = $pictureBox.PointToClient($screenPos)
 
             if ($isFormSelected -and $form.ClientRectangle.Contains($clientPos)) {
                 $stream.WriteByte(2)
-                [byte[]]$mouseBytes = [System.BitConverter]::GetBytes($clientPos.X) + [System.BitConverter]::GetBytes($clientPos.Y)
+                [byte[]]$mouseBytes = [System.BitConverter]::GetBytes($clientPos.X - $pictureBox.Location.X) + [System.BitConverter]::GetBytes($clientPos.Y - $pictureBox.Location.Y)
                 $stream.Write($mouseBytes, 0, 8)
             } else {
                 $stream.WriteByte(0)

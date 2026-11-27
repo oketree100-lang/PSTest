@@ -79,13 +79,10 @@ function Start-RemoteSession {
                 while ($offset -lt 8) {
                     $read = $stream.Read($mouseBytes, $offset, 8 - $offset)
                     $offset += $read
-                    Write-Host $read
                 }
                 
                 $x = [System.BitConverter]::ToInt32($mouseBytes, 0)
                 $y = [System.BitConverter]::ToInt32($mouseBytes, 4)
-
-                Write-Host "x:$x y:$y"
 
                 [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new($x, $y)
             }
